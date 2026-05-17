@@ -29,7 +29,7 @@ interface LookupOutcome {
 
 export const SearchBar = () => {
   const [input, setInput] = useState('');
-  const [country, setCountry] = useState('US');
+  const [country] = useState('US');
   const [busy, setBusy] = useState(false);
   const dispatch = useAppDispatch();
   const cities = useAppSelector((s) => s.cities.cities);

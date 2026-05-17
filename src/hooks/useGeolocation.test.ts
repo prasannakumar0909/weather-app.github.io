@@ -202,7 +202,7 @@ describe('useGeolocation hook', () => {
   });
 
   it('should handle geolocation permission denied error', async () => {
-    const getCurrentPositionMock = jest.fn().mockImplementation((success, error) => {
+    const getCurrentPositionMock = jest.fn().mockImplementation((_success, error) => {
       error({
         code: 1, // PERMISSION_DENIED
         message: 'User denied geolocation',
@@ -225,7 +225,7 @@ describe('useGeolocation hook', () => {
   });
 
   it('should handle geolocation position unavailable error', async () => {
-    const getCurrentPositionMock = jest.fn().mockImplementation((success, error) => {
+    const getCurrentPositionMock = jest.fn().mockImplementation((_success, error) => {
       error({
         code: 2, // POSITION_UNAVAILABLE
         message: 'Position unavailable',
@@ -248,7 +248,7 @@ describe('useGeolocation hook', () => {
   });
 
   it('should handle geolocation timeout error', async () => {
-    const getCurrentPositionMock = jest.fn().mockImplementation((success, error) => {
+    const getCurrentPositionMock = jest.fn().mockImplementation((_success, error) => {
       error({
         code: 3, // TIMEOUT
         message: 'Timeout',
@@ -271,7 +271,7 @@ describe('useGeolocation hook', () => {
   });
 
   it('should handle generic geolocation errors', async () => {
-    const getCurrentPositionMock = jest.fn().mockImplementation((success, error) => {
+    const getCurrentPositionMock = jest.fn().mockImplementation((_success, error) => {
       error(new Error('Unknown hardware error'));
     });
     setupGeolocationMock(getCurrentPositionMock);
@@ -288,7 +288,7 @@ describe('useGeolocation hook', () => {
   });
 
   it('should handle geolocation other code errors', async () => {
-    const getCurrentPositionMock = jest.fn().mockImplementation((success, error) => {
+    const getCurrentPositionMock = jest.fn().mockImplementation((_success, error) => {
       error({
         code: 4,
         message: 'Other error',

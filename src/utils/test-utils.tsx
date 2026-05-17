@@ -9,17 +9,8 @@ export function renderWithProviders(
   ui: React.ReactElement,
   {
     preloadedState = {},
-    store = configureStore({
-      reducer: { cities: citiesReducer },
-      preloadedState,
-    }),
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
-    }),
+    store,
+    queryClient,
     ...renderOptions
   }: {
     preloadedState?: any;
@@ -28,10 +19,27 @@ export function renderWithProviders(
     [key: string]: any;
   } = {}
 ) {
+  const finalStore =
+    store ||
+    configureStore({
+      reducer: { cities: citiesReducer } as any,
+      preloadedState,
+    });
+
+  const finalQueryClient =
+    queryClient ||
+    new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
   function Wrapper({ children }: PropsWithChildren<{}>): React.JSX.Element {
     return (
-      <Provider store={store}>
-        <QueryClientProvider client={queryClient}>
+      <Provider store={finalStore}>
+        <QueryClientProvider client={finalQueryClient}>
           {children}
         </QueryClientProvider>
       </Provider>
@@ -39,8 +47,8 @@ export function renderWithProviders(
   }
 
   return {
-    store,
-    queryClient,
+    store: finalStore,
+    queryClient: finalQueryClient,
     ...render(ui, { wrapper: Wrapper, ...renderOptions }),
   };
 }

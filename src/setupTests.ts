@@ -29,7 +29,7 @@ jest.mock('framer-motion', () => {
 });
 
 // Mock react-hot-toast globally
-const mockToastFn = jest.fn((msg, opts) => {});
+const mockToastFn = jest.fn();
 (mockToastFn as any).success = jest.fn();
 (mockToastFn as any).error = jest.fn();
 

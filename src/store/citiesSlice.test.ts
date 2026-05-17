@@ -72,7 +72,7 @@ describe('cities slice', () => {
     };
     mockLocalStorage[STORAGE_KEY] = JSON.stringify(savedState);
 
-    let isolatedReducer;
+    let isolatedReducer: any;
     jest.isolateModules(() => {
       const slice = require('./citiesSlice');
       isolatedReducer = slice.default;
@@ -87,7 +87,7 @@ describe('cities slice', () => {
     // @ts-ignore
     delete global.window;
 
-    let isolatedReducer;
+    let isolatedReducer: any;
     jest.isolateModules(() => {
       const slice = require('./citiesSlice');
       isolatedReducer = slice.default;
