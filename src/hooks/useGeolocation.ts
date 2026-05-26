@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { geoClient } from '@/api/client';
+import { apiClient } from '@/api/client';
 import type { SavedCity } from '@/types/weather';
 
 interface ReverseGeoResult {
@@ -42,7 +42,7 @@ export const useGeolocation = (): UseGeolocationReturn => {
       let displayName = `Near (${lat.toFixed(2)}, ${lon.toFixed(2)})`;
       let country = '';
       try {
-        const { data } = await geoClient.get<ReverseGeoResult[]>('/reverse', {
+        const { data } = await apiClient.get<ReverseGeoResult[]>('/reverse', {
           params: { lat, lon, limit: 1 },
         });
         if (data?.[0]) {

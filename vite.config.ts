@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
-  base: '/weather-app.github.io/',
+  base: import.meta.env.VITE_BASE_URL ?? '/',
   plugins: [react()],
   resolve: {
     alias: {
@@ -13,5 +13,12 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });

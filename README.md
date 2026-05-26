@@ -31,7 +31,7 @@ npm install
 
 Forecast uses OpenWeatherMap. Free tier is plenty.
 
-1. Get your API key from the openweathermap
+1. Get your API key from the OpenWeatherMap dashboard.
 
 ### 3. Configure environment
 
@@ -39,21 +39,47 @@ Forecast uses OpenWeatherMap. Free tier is plenty.
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` to point the frontend at the local backend:
 
 ```env
-VITE_WEATHER_API_KEY=your_actual_key_here
+VITE_API_BASE_URL=/api
+OPENWEATHERMAP_API_KEY=your_actual_key_here
 ```
 
 > ⚠️ Never commit `.env`. It's in `.gitignore` by default.
 
 ### 4. Run
 
+Open a terminal and start the backend first:
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+Then start the frontend in a separate terminal:
+
 ```bash
 npm run dev
 ```
 
-App will open at <http://localhost:5173>.
+Open the app at <http://localhost:5173>.
+
+### 5. Railway deployment
+
+This repo is set up to deploy as a single Railway Docker service. The backend serves the frontend static build from Spring Boot.
+
+1. Create a Railway project and connect this repository.
+2. Ensure Railway runs the root `Dockerfile`.
+3. Railway will set `PORT`; Spring Boot reads it automatically.
+4. Add environment variables if you want to override the OpenWeatherMap key:
+
+```bash
+OPENWEATHERMAP_API_KEY=your_actual_key_here
+VITE_BASE_URL=/  # optional if you need a custom root base
+```
+
+If you want to use the embedded key, no extra key configuration is required.
 
 ### 5. Build for production
 

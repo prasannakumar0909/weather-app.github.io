@@ -1,0 +1,11 @@
+node_modules
+backend/target
+dist
+dist-ssr
+.env
+.env.local
+.env.production
+.git
+.vscode
+.idea
+**/*.log

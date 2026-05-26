@@ -100,7 +100,7 @@ Previous unit's data stays in cache (gcTime: 30min) so toggling back is instant
 
 ### 3.1 `src/api/client.ts`
 
-Two Axios instances: `weatherClient` (data endpoints) and `geoClient` (geocoding). Both share:
+Two Axios instances: `weatherClient` (data endpoints) and `apiClient` (geocoding). Both share:
 
 - A request interceptor that injects `appid` from the env on every call.
 - A response interceptor that normalizes errors into clean `Error` instances with human-readable messages. The UI surfaces these directly.

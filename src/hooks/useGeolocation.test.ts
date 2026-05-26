@@ -1,10 +1,10 @@
 import { renderHook, act } from '@testing-library/react';
 import { useGeolocation } from './useGeolocation';
-import { geoClient } from '@/api/client';
+import { apiClient } from '@/api/client';
 
 // Mock the API client
 jest.mock('@/api/client', () => ({
-  geoClient: {
+  apiClient: {
     get: jest.fn(),
   },
 }));
@@ -65,7 +65,7 @@ describe('useGeolocation hook', () => {
     setupGeolocationMock(getCurrentPositionMock);
 
     // Mock successful reverse geocode
-    (geoClient.get as jest.Mock).mockResolvedValue({
+    (apiClient.get as jest.Mock).mockResolvedValue({
       data: [
         {
           name: 'San Francisco',
@@ -85,7 +85,7 @@ describe('useGeolocation hook', () => {
     });
 
     expect(getCurrentPositionMock).toHaveBeenCalled();
-    expect(geoClient.get).toHaveBeenCalledWith('/reverse', {
+    expect(apiClient.get).toHaveBeenCalledWith('/reverse', {
       params: { lat: 37.7749, lon: -122.4194, limit: 1 },
     });
 
@@ -110,7 +110,7 @@ describe('useGeolocation hook', () => {
     setupGeolocationMock(getCurrentPositionMock);
 
     // Mock successful reverse geocode without state
-    (geoClient.get as jest.Mock).mockResolvedValue({
+    (apiClient.get as jest.Mock).mockResolvedValue({
       data: [
         {
           name: 'San Francisco',
@@ -149,7 +149,7 @@ describe('useGeolocation hook', () => {
     setupGeolocationMock(getCurrentPositionMock);
 
     // Mock reverse geocode empty data
-    (geoClient.get as jest.Mock).mockResolvedValue({
+    (apiClient.get as jest.Mock).mockResolvedValue({
       data: [],
     });
 
@@ -181,7 +181,7 @@ describe('useGeolocation hook', () => {
     setupGeolocationMock(getCurrentPositionMock);
 
     // Mock reverse geocode failure
-    (geoClient.get as jest.Mock).mockRejectedValue(new Error('API error'));
+    (apiClient.get as jest.Mock).mockRejectedValue(new Error('API error'));
 
     const { result } = renderHook(() => useGeolocation());
 
