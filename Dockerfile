@@ -2,6 +2,7 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 COPY package.json package-lock.json vite.config.ts tsconfig.json tsconfig.node.json postcss.config.js tailwind.config.js ./
+COPY index.html ./
 COPY public ./public
 COPY src ./src
 RUN npm ci && npm run build
