@@ -1,4 +1,4 @@
-# Forecast Weather App— Technical Documentation
+# Forecast Weather App — Technical Documentation
 
 This document covers the architecture, integration patterns, performance considerations, and security posture of the Forecast codebase.
 
@@ -6,37 +6,44 @@ This document covers the architecture, integration patterns, performance conside
 
 ## 1. Architecture Overview
 
-Forecast is a single-page React application with no backend of its own. All weather data is fetched directly from OpenWeatherMap's REST API from the browser. Client state and server state are managed separately and intentionally:
+Forecast is a React + Vite frontend backed by a Spring Boot proxy backend.
+
+The frontend is responsible for the UI, local persistence, and browser geolocation.
+The backend is responsible for forwarding OpenWeatherMap requests and keeping the raw API key off the client.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    React Components                     │
-│  Dashboard ─ HeroCard ─ MiniCard ─ Forecasts ─ Search   │
-└──────┬───────────────────────────────────┬──────────────┘
-       │                                   │
-       │ useAppSelector / dispatch         │ useQuery
-       ▼                                   ▼
-┌──────────────┐                  ┌──────────────────┐
-│ Redux Store  │                  │  React Query     │
-│ (city list,  │                  │  (server cache,  │
-│  primary,    │                  │   weather data)  │
-│  unit pref)  │                  └────────┬─────────┘
-└──────┬───────┘                           │
-       │                                   │ axios
-       │ localStorage                      ▼
-       ▼                          ┌──────────────────┐
-   Browser storage                │ OpenWeatherMap   │
-                                  │ /weather, /forecast,
-                                  │ /geo/zip, /geo/reverse
-                                  └──────────────────┘
+┌────────────────────────────────────┐
+│           React Frontend           │
+│  Dashboard → SearchBar → HeroCard  │
+└───────────────┬────────────────────┘
+                │
+                │ Redux Toolkit / React Query
+                ▼
+┌───────────────┴────────────────────┐
+│          Browser localStorage       │
+│ (cities, primaryId, unit, geo consent)
+└───────────────┬────────────────────┘
+                │
+                │ Axios proxy calls to /api
+                ▼
+┌────────────────────────────────────┐
+│        Spring Boot backend proxy    │
+│ /api/geo/zip, /api/weather, /api/forecast
+└────────────────────────────────────┘
+                │
+                ▼
+┌────────────────────────────────────┐
+│         OpenWeatherMap API         │
+│  /geo/zip, /weather, /forecast     │
+└────────────────────────────────────┘
 ```
 
 ### Why two state systems?
 
-- **Redux Toolkit** holds the *user's curated list* — cities, primary selection, unit preference, geolocation consent. This is small, mutable, and needs to be persisted.
-- **React Query** holds the *fetched weather payloads* — large, stale-able, and best managed by a cache with built-in deduplication, retry, and background refresh.
+- **Redux Toolkit** stores the user's saved city list, selected primary city, unit preference, and geolocation consent.
+- **React Query** manages fetched weather payloads, caching them with stale and garbage collection policies.
 
-Mixing them would create a synchronization headache. Keeping them separate means each tool solves the problem it's good at.
+Separating user state from server state reduces synchronization complexity and keeps each layer focused.
 
 ---
 
@@ -45,53 +52,51 @@ Mixing them would create a synchronization headache. Keeping them separate means
 ### 2.1 Add-city flow
 
 ```
-User submits ZIP
+User submits ZIP input
    ↓
 SearchBar.onSubmit
    ↓
-lookupZip(zip, country) ─→ OpenWeatherMap /geo/zip
+lookupZip(zip, country) → /api/geo/zip
+   ↓
+Backend proxies request to OpenWeatherMap
    ↓
 Resolved { name, lat, lon, country }
    ↓
 dispatch(addCity({...}))
    ↓
-Redux state updates (also writes to localStorage)
+Redux state updates and persists to localStorage
    ↓
-Dashboard re-renders; new MiniCard mounts
+Dashboard renders new MiniCard
    ↓
-MiniCard's useCurrentWeather query fires
-   ↓
-React Query caches response; UI renders
+MiniCard and primary Hero query weather via React Query
 ```
 
-### 2.2 Switch-primary flow
+### 2.2 Primary selection flow
 
 ```
 User clicks MiniCard
    ↓
 dispatch(setPrimary(cityId))
    ↓
-Dashboard's primaryCity memo recomputes
+primaryCity recomputes in Dashboard
    ↓
-HeroCard remounts with AnimatePresence crossfade
+HeroCard and forecasts render for the new city
    ↓
-HeroCard's useCurrentWeather query — likely already cached → instant render
-   ↓
-DynamicBackground picks up new theme
+DynamicBackground theme updates
 ```
 
-### 2.3 Unit-toggle flow
+### 2.3 Unit toggle flow
 
 ```
 User clicks °C / °F
    ↓
 dispatch(setUnit(newUnit))
    ↓
-React Query keys (which include `unit`) change for all components
+Query keys change for all weather queries
    ↓
-New queries fire for cities × forecasts
+React Query fetches fresh data for each city in the new unit
    ↓
-Previous unit's data stays in cache (gcTime: 30min) so toggling back is instant
+Previous-unit data stays cached for quick toggling
 ```
 
 ---
@@ -100,152 +105,136 @@ Previous unit's data stays in cache (gcTime: 30min) so toggling back is instant
 
 ### 3.1 `src/api/client.ts`
 
-Two Axios instances: `weatherClient` (data endpoints) and `apiClient` (geocoding). Both share:
-
-- A request interceptor that injects `appid` from the env on every call.
-- A response interceptor that normalizes errors into clean `Error` instances with human-readable messages. The UI surfaces these directly.
-
-This is the *only* place the API key is read. Components never see it.
+- Creates a shared Axios instance with `baseURL` taken from `VITE_API_BASE_URL` (default `/api`).
+- Normalizes backend errors into user-facing `Error` messages.
+- Handles 401, 404, 429, and timeout cases cleanly.
 
 ### 3.2 `src/api/weather.ts`
 
-Pure functions per endpoint: `lookupZip`, `fetchCurrentWeather`, `fetchForecast`. No React, no state — easy to unit-test with `vi.mock('axios')`.
+- Exposes pure async functions:
+  - `lookupZip(zip, country)` → `/geo/zip`
+  - `fetchCurrentWeather(lat, lon, units)` → `/weather`
+  - `fetchForecast(lat, lon, units)` → `/forecast`
+- Does not depend on React, so it is easy to mock and unit test.
 
-### 3.3 `src/store/citiesSlice.ts`
+### 3.3 `backend/src/main/java/com/example/weather/service/OpenWeatherService.java`
 
-Single slice with reducers:
+- Constructs backend requests to OpenWeatherMap.
+- Appends `appid` from `OPENWEATHERMAP_API_KEY`.
+- Forwards query params for zip, lat/lon, and units.
 
-- `addCity` — guards against duplicates and the 5-city cap.
-- `removeCity` — promotes the next city to primary if needed.
-- `setPrimary` — no-ops if the id isn't in the list (defensive).
-- `setUnit`, `setGeoConsent`, `reorderCities`.
+### 3.4 `backend/src/main/java/com/example/weather/controller/WeatherController.java`
 
-Every reducer that mutates state calls `persist(state)` to write to `localStorage`. Persistence lives inside the slice rather than a separate middleware to keep the surface area small.
+- Exposes `/api/geo/zip`, `/api/weather`, and `/api/forecast`.
+- Forwards HTTP errors from OpenWeatherMap back to the frontend.
 
-### 3.4 `src/hooks/useWeather.ts`
+### 3.5 `src/store/citiesSlice.ts`
 
-Thin wrappers over `useQuery`:
+- Manages saved cities with a hard cap of five.
+- Prevents duplicate IDs.
+- Updates `primaryId` automatically when the primary city is removed.
+- Persists every state mutation to `localStorage`.
 
-- Keys: `['current', cityId, unit]`, `['forecast', cityId, unit]`.
-- `staleTime: 10min`, `gcTime: 30min`, `retry: 1`.
-- `enabled` is gated on `city.lat && city.lon` so queries don't fire with undefined coordinates.
+### 3.6 `src/hooks/useWeather.ts`
 
-### 3.5 `src/hooks/useGeolocation.ts`
+- `useCurrentWeather(city, unit)` and `useForecast(city, unit)` wrap React Query.
+- Both use `staleTime: 10 minutes` and `gcTime: 30 minutes`.
+- Queries are disabled until valid coordinates exist.
 
-Wraps `navigator.geolocation.getCurrentPosition` in a Promise, then reverse-geocodes the result to a display name. Translates raw error codes (`PERMISSION_DENIED`, `POSITION_UNAVAILABLE`, `TIMEOUT`) into user-friendly strings.
+### 3.7 `src/hooks/useGeolocation.ts`
 
-### 3.6 `src/components/DynamicBackground.tsx` + `WeatherEffects.tsx`
+- Wraps `navigator.geolocation.getCurrentPosition` in a Promise.
+- Converts browser geolocation errors into clear messages.
 
-`DynamicBackground` owns the gradient crossfade (via `AnimatePresence` keyed on theme). `WeatherEffects` is a `memo`-ized component that generates and renders the particle layer for the active theme. Particle arrays are generated once with `useMemo` so re-renders of the parent don't reseed.
+### 3.8 `src/components/Dashboard.tsx`
 
-### 3.7 `src/components/Dashboard.tsx`
-
-Composition root. Reads Redux state, computes the active city + theme, conditionally renders the empty state or the populated grid. Also handles the *passive* geolocation attempt (only if permission is already granted) so returning users with no cities don't have to click again.
+- Coordinates the main layout and theme.
+- Attempts a silent geolocation lookup once when there are no saved cities and permission is already granted.
+- Renders `NoState` when the dashboard is empty.
 
 ---
 
 ## 4. API Integration Strategy
 
-### 4.1 Endpoints used
+### 4.1 Endpoints
 
-| Endpoint | Purpose | Cached |
+| Endpoint | Purpose | Notes |
 | --- | --- | --- |
-| `GET /geo/zip` | Resolve ZIP → coordinates | No (one-shot per add) |
-| `GET /geo/reverse` | Resolve coordinates → name | No (one-shot per geolocate) |
-| `GET /data/2.5/weather` | Current conditions for a city | 10 min stale, 30 min gc |
-| `GET /data/2.5/forecast` | 5-day / 3-hour forecast for a city | 10 min stale, 30 min gc |
+| `/api/geo/zip` | Resolve ZIP/postal code to coordinates | Uses OpenWeatherMap geocoding proxy |
+| `/api/weather` | Current weather for coordinates | Proxied from OpenWeatherMap `/weather` |
+| `/api/forecast` | 5-day forecast for coordinates | Proxied from OpenWeatherMap `/forecast` |
 
-### 4.2 Auth
+### 4.2 Authentication
 
-API key is read from `import.meta.env.VITE_WEATHER_API_KEY` and attached to every request by Axios interceptors. Never logged, never put in URL params manually by components.
+- The backend reads `OPENWEATHERMAP_API_KEY` from environment variables.
+- The frontend only uses `VITE_API_BASE_URL` to talk to `/api`.
+- The raw API key never appears in client code or browser requests.
 
-### 4.3 Error normalization
+### 4.3 Error handling
 
-Axios interceptors map status codes to messages:
+- Backend returns OpenWeatherMap status codes unchanged.
+- `src/api/client.ts` converts them into readable error messages.
+- UI components render toast messages directly from `Error.message`.
 
-| Status | Message |
-| --- | --- |
-| 401 | "Invalid API key. Check your `VITE_WEATHER_API_KEY`." |
-| 404 | API's own `message` field, or "Location not found." |
-| 429 | "Rate limit reached. Please slow down." |
-| timeout | "Request timed out. Check your connection." |
-| other | API message, or fallback to `error.message` |
+### 4.4 Caching
 
-React Query passes the thrown `Error` to the consuming component's `error` field; toasts display `error.message` directly.
-
-### 4.4 Caching strategy
-
-| Layer | Behavior |
-| --- | --- |
-| **React Query** | 10-min staleTime — no refetch on focus, no refetch on mount if fresh, automatic dedup |
-| **HTTP cache** | We don't set any `Cache-Control` ourselves; OpenWeatherMap's defaults apply |
-| **localStorage** | Only the *city list*, not weather payloads — payloads should refresh, the list is stable |
-
-### 4.5 Rate-limit protection
-
-- **Hard cap of 5 cities** means at most 10 queries (5 current + 5 forecast) per unit. On a unit toggle, that's up to 20 background refetches — well below OpenWeatherMap's free tier of 60/min.
-- **Submit-on-Enter only** for the search bar, with a `busy` flag to disable double-submits. We don't query as the user types — adding a city is an explicit commitment, not a search-as-you-type interaction.
-- **The `useDebouncedValue` hook is included** for future search-as-you-type features (e.g., a city autocomplete), but isn't wired into the current SearchBar by design.
+- React Query caches current weather and forecast responses for 10 minutes.
+- Garbage collection removes unused cache entries after 30 minutes.
+- Local storage only persists the saved city list and preferences, not weather payloads.
 
 ---
 
-## 5. Security Measures
+## 5. Persistence and state
 
-### 5.1 Environment variables
-
-- All secrets live in `.env`, gitignored.
-- Only `VITE_`-prefixed variables are exposed to the client by Vite. We deliberately do not put anything else there.
-
-
-### 5.2 XSS / injection
-
-- React escapes everything by default.
-- We never use `dangerouslySetInnerHTML`.
-- API responses are typed; bad shape → React Query error path.
-
-### 5.43PII
-
-The only data leaving the browser is the user's coordinates (or ZIP), sent to OpenWeatherMap. Nothing else is transmitted anywhere. No analytics, no telemetry, no third-party scripts.
-
-### 5.4 localStorage
-
-We store: city display names, ZIPs, lat/lon, primary selection, unit, and a boolean geo consent flag. No tokens, no PII beyond approximate location. A user clearing site data fully resets the app.
+- Saved city state is stored under `forecast-weather-state-v1` in `localStorage`.
+- Persisted fields:
+  - `cities`
+  - `primaryId`
+  - `unit`
+  - `hasGeoConsent`
+- If `localStorage` is unavailable or malformed, the app falls back gracefully to the default state.
 
 ---
 
 ## 6. Performance
 
-### 6.1 Bundle
+### 6.1 Query behavior
 
-- Vite's tree-shaking + ESBuild minification.
-- `lucide-react` is tree-shakable — only imported icons ship.
-- Framer Motion's bundle is the heaviest single dependency (~50KB gzipped). It's worth it for the orchestrated animations; if size becomes critical, the same effects can be ported to CSS keyframes + `transform`.
+- Queries do not refetch on window focus by default.
+- Retry is limited to 1 attempt.
+- Request timeouts are set to 10 seconds.
 
-### 6.2 Render
+### 6.2 Rendering
 
-- `WeatherEffects` is `React.memo`'d and its particle arrays are `useMemo`'d. Theme changes regenerate the layer; nothing else does.
-- The `DynamicBackground` is `fixed` and outside the main grid, so reflows in the dashboard don't repaint it.
-- Mini cards use `motion.div` with `layout` so reordering animates automatically.
-
-### 6.3 Network
-
-- React Query dedupes concurrent requests for the same key.
-- 10-minute staleTime means a returning user inside that window hits zero network requests.
-- On unit toggle, queries fire in parallel; React Query manages concurrency.
+- `WeatherEffects` is memoized.
+- `DynamicBackground` is managed separately from content, minimizing reflows.
+- `motion.div` `layout` props keep reorder animations smooth.
 
 ---
 
-## 7. Testing Strategy (recommended additions)
+## 7. Security
 
-This codebase ships without tests in the interest of brevity, but the architecture is designed to be testable:
+- `OPENWEATHERMAP_API_KEY` is required for backend startup.
+- The backend proxies OpenWeatherMap requests and hides the API key from the client.
+- The frontend uses only safe React rendering patterns and does not use `dangerouslySetInnerHTML`.
+- No analytics or third-party tracking is included.
 
-- **`api/weather.ts`**: pure functions — mock Axios and assert request shape + response handling.
-- **`store/citiesSlice.ts`**: pure reducers — feed `(initialState, action)` and assert new state.
-- **`utils/theme.ts`**: pure mapping — table-driven test.
-- **Hooks**: use `@testing-library/react-hooks` or `renderHook`.
-- **Components**: `@testing-library/react` + `msw` for API mocking. Test the Empty State, the 5-city cap toast, the unit toggle invalidating queries, etc.
+---
 
-Suggested deps to add: `vitest`, `@testing-library/react`, `@testing-library/jest-dom`, `msw`, `@vitest/coverage-v8`.
+## 8. Testing guidance
+
+- `src/api/weather.ts` can be unit tested by mocking Axios.
+- `citiesSlice.ts` reducers are straightforward reducer tests.
+- `useWeather.ts` and `useGeolocation.ts` are good candidates for hook tests.
+- `Dashboard`, `SearchBar`, `HeroCard`, and forecast components are good targets for integration tests with mocked API responses.
+
+---
+
+## 9. Backend notes
+
+- The backend is a Spring Boot app in `backend/`.
+- It builds with Maven and serves the frontend static assets from `backend/src/main/resources/static`.
+- The root `Dockerfile` first builds the frontend, then copies the production build into the backend static folder, and finally packages the Spring Boot jar.
 
 ---
 

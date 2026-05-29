@@ -1,139 +1,134 @@
 # Forecast Weather App — Functional Documentation
 
-This document describes Forecast from the user's perspective: what the product does, how flows behave, and the explicit feature inventory.
+This document describes Forecast from the user's perspective: product behavior, supported flows, and the current feature set.
 
 ---
 
 ## 1. Product Summary
 
-Forecast is a personal weather dashboard. A user lands on a single page, optionally allows geolocation (or skips it), and curates a list of up to five cities they care about. One city is always "primary" and gets a full-bleed hero treatment with hourly + 5-day forecasts; the rest live in a compact rail and can be promoted to primary with one click.
+Forecast is a weather dashboard that lets users save up to five cities and inspect weather details for one primary city plus multiple secondary cities.
 
-The visual language adapts to the primary city's current conditions — sunny days fade to gold and orange, rainy ones to slate blue, stormy nights to deep indigo with crawling lightning. The point is to make the weather *feel*, not just inform.
+- The primary city appears in a large hero view with current conditions and forecasts.
+- Secondary cities appear as mini cards and can be promoted to primary with one click.
+- The UI adapts to weather conditions through animated gradients and particle effects.
+- User preferences and saved cities are persisted locally.
 
 ---
 
 ## 2. Primary User Flows
 
-### 2.1 First-time visit (no saved state)
+### 2.1 First-time visit
 
-1. App renders with a neutral gradient background.
-2. The No State card appears: *"Welcome to Forecast"*, with a single CTA: **Use My Location**.
+1. The app loads with an empty dashboard.
+2. The welcome card appears with a **Use My Location** button.
 3. User clicks **Use My Location**.
-   - Browser permission prompt appears.
-   - On **allow**: the app calls `navigator.geolocation.getCurrentPosition`, reverse-geocodes via OpenWeatherMap, and adds the resulting city as the primary. Background gradient crossfades to the appropriate theme.
-   - On **deny**: a toast appears explaining that they can add a city via ZIP code instead.
-4. Alternatively, the user types a ZIP in the search bar and selects a country, then clicks **Add**. That city becomes primary.
+   - Browser geolocation is requested.
+   - If granted, the app reverse-geocodes coordinates through the backend and saves the resulting city.
+   - The saved city becomes primary and the theme updates.
+4. If geolocation is denied or unavailable, the user can add one or more cities by ZIP/postal code.
 
-### 2.2 Returning visit (state in localStorage)
+### 2.2 Returning visit
 
-1. App boots, reads cities + primary + unit + geo consent from `localStorage`.
-2. React Query refetches data for every saved city (parallel) — data older than 10 minutes is considered stale and is refreshed automatically.
-3. The user's last primary city is restored.
-4. If the user had previously granted geolocation and there are no saved cities, the app silently locates them (no prompt, since permission is already granted).
+1. Saved cities, primary selection, unit preference, and geo consent are restored from `localStorage`.
+2. React Query refreshes weather data as needed.
+3. The last primary city is restored.
+4. If no cities are saved but geolocation permission is already granted, the app silently locates the user once.
 
-### 2.3 Adding a city by ZIP
+### 2.3 Adding cities by ZIP
 
-1. User focuses the SearchBar input.
-2. User types a postal code; (defaults to US).
-3. User clicks **Add** (or hits Enter).
-4. App validates with OpenWeatherMap's `/geo/zip` endpoint.
-   - On success: city is added to the Redux list and the input clears.
-   - On failure (invalid zip, network error, API key issue): toast notification displays the normalized error message.
-5. If 5 cities are already saved, an error toast explains the cap and asks the user to remove one first. The input remains populated so they can retry.
+1. User enters one or more ZIP/postal codes in the SearchBar.
+2. The app supports comma-, space-, or semicolon-separated input.
+3. User submits the form.
+4. Valid zip codes are resolved by the backend proxy and added to the dashboard.
+5. Duplicate entries and failures are reported with toasts.
+6. The dashboard enforces a hard cap of five cities.
 
-### 2.4 Switching the primary city
+### 2.4 Promoting a city
 
-1. User clicks any Mini Card in the "My Cities" panel.
-2. Redux `primaryId` is updated.
-3. The Hero swaps to the new city with an `AnimatePresence` crossfade.
-4. The background theme animates to match.
-5. Hourly + 5-day forecasts re-render for the new city. If the data is already cached (recent visit), no network request is made.
+1. User clicks a MiniCard.
+2. `primaryId` updates in Redux.
+3. The primary hero view switches to the selected city.
+4. The weather theme transitions to the new city's conditions.
 
 ### 2.5 Removing a city
 
-1. User hovers a Mini Card; an **X** appears in the corner.
-2. User clicks the X.
-3. Card animates out (scale + fade).
-4. Redux removes it. If it was the primary, the first remaining city becomes primary. If it was the last city, the No State returns.
+1. User hovers a MiniCard.
+2. A remove control appears.
+3. User removes the city.
+4. If the removed city was primary, the next available city becomes primary.
+5. If the last city is removed, the empty state returns.
 
-### 2.6 Toggling units
+### 2.6 Changing units
 
-1. User clicks **°C** or **°F** on the unit toggle.
-2. Toggle thumb springs to the new position.
-3. All cached queries are invalidated *implicitly* — the unit is part of every React Query key, so the new unit's queries fire and populate independently. The previous unit's data remains cached, so toggling back is instant.
+1. User toggles between **°C** and **°F**.
+2. The preference is persisted in Redux and `localStorage`.
+3. Weather queries update using the selected unit.
+4. Previously cached data remains available for faster toggling.
 
 ---
 
 ## 3. Feature Inventory
 
-### 3.1 Core
+| Feature | Description |
+| --- | --- |
+| **Geolocation onboarding** | Add the current location with one click |
+| **Bulk ZIP entry** | Enter multiple ZIPs at once |
+| **5-city limit** | Save up to five cities simultaneously |
+| **Primary city focus** | One large hero city plus a mini card rail |
+| **City promotion** | Tap any mini card to make it primary |
+| **Local persistence** | Saved cities and preferences survive reloads |
+| **Backend proxy** | OpenWeatherMap requests are routed through Spring Boot |
+| **Unit toggle** | Convert between metric and imperial units |
+
+### 3.1 Visual Behavior
 
 | Feature | Description |
 | --- | --- |
-| **Auto-locate** | One-tap geolocation that uses cached browser permissions when available |
-| **Add by ZIP** | Up to 5 cities, 8 supported country codes |
-| **Primary/secondary layout** | One hero card + grid of mini cards |
-| **Promote-on-click** | Any mini card can become the primary |
-| **Remove city** | Hover-revealed X on each mini card |
-| **Persistence** | Cities, primary, unit, and geo consent stored in localStorage |
-| **5-city cap** | Hard limit enforced in the Redux reducer (not just the UI) |
-| **°C / °F toggle** | Affects all displayed temperatures and wind units |
+| **Adaptive gradients** | Weather-aware background themes |
+| **Animated effects** | Rain, snow, lightning, stars, and haze visuals |
+| **Glassmorphism** | Frosted glass panels and translucent cards |
+| **Responsive layout** | Mobile-first hero and cards layout |
+| **Accessible typography** | Strong hierarchy and legible text styling |
 
-### 3.2 Visual
+### 3.2 Forecast Capabilities
 
 | Feature | Description |
 | --- | --- |
-| **Dynamic gradients** | 9 distinct gradient themes mapped to weather + day/night |
-| **Crossfade transition** | Background gradient fades smoothly when active city changes |
-| **Particle effects** | Rain droplets, snowflakes, drifting clouds, twinkling stars, sun glow, lightning flashes, mist gradients |
-| **Glassmorphism** | All cards use a custom `glass` / `glass-strong` utility with backdrop-filter blur + saturation |
-| **Grain overlay** | SVG noise applied at 4% opacity for tactile feel |
-| **Typography pairing** | Cormorant Garamond (display) + Outfit (body) + JetBrains Mono (forthcoming charts) |
-| **Decorative oversized icon** | Large semi-transparent weather icon in the hero card corner |
-| **Staggered entrance** | Cards and forecast items fade/slide in with sequenced delays |
+| **Current conditions** | Temp, feels-like, humidity, wind, pressure, visibility |
+| **Hourly forecast** | Next 24 hours in 3-hour increments |
+| **5-day outlook** | Multi-day summary with min/max and precipitation |
+| **Local time handling** | Times reflect the city's timezone |
 
-### 3.3 Forecast
+### 3.3 Feedback and resilience
 
 | Feature | Description |
 | --- | --- |
-| **Hero metrics** | Wind, humidity, pressure, visibility, sunrise, sunset |
-| **Feels-like + min/max** | Beneath the main temperature |
-| **Hourly strip** | Next 24 hours in 3-hour resolution (8 entries) with temp, icon, and precipitation % |
-| **5-day outlook** | Per-day min/max bars with condition icon and precipitation % |
-| **Local time display** | All times reflect the city's IANA offset, not the user's clock |
-
-### 3.4 Feedback / Resilience
-
-| Feature | Description |
-| --- | --- |
-| **Toast notifications** | Success and error feedback for all user actions |
-| **Loading skeletons** | Pulsing placeholders for HeroCard, HourlyForecast, DailyForecast |
-| **Error states** | Per-card error messages with retry guidance |
-| **Reduced motion** | All animations disabled when `prefers-reduced-motion: reduce` is set |
-| **Empty state** | Friendly onboarding card when no cities are saved |
+| **Toast feedback** | Success, duplicate, and error messages |
+| **Loading UI** | Spinners and skeleton elements during fetches |
+| **Duplicate guard** | Prevents adding the same city twice |
+| **Hard cap enforcement** | Redux prevents more than five cities |
+| **Reduced motion** | Respects system motion preferences |
 
 ---
 
-## 4. UI States Reference
+## 4. UI States
 
 | Component | States |
 | --- | --- |
-| **Dashboard** | `empty`, `populated` |
-| **HeroCard** | `loading`, `success`, `error` |
-| **MiniCard** | `loading`, `success`, `error`; modifier: `active` / `inactive`; transient: `hover` (reveals remove) |
-| **SearchBar** | `idle`, `busy`, `disabled` (when input empty) |
-| **UnitToggle** | `C`, `F` |
-| **HourlyForecast** | `loading`, `success`, `error` |
-| **DailyForecast** | `loading`, `success`, `error` |
+| Dashboard | `empty`, `loaded` |
+| SearchBar | `idle`, `busy`, `disabled` |
+| HeroCard | `loading`, `loaded`, `error` |
+| MiniCard | `active`, `inactive`, `removed` |
+| UnitToggle | `metric`, `imperial` |
+| NoState | `idle`, `locating`, `error` |
 
 ---
 
 ## 5. Accessibility Notes
 
-- All interactive elements are real buttons or have explicit `role` + `tabIndex`.
-- The unit toggle uses `aria-pressed`.
-- The active mini card uses `aria-current="true"`.
-- Color contrast was checked against AA at WCAG for all glass surfaces (white text on at least 40% black-equivalent base).
-- Reduced motion is honored globally in `index.css`.
-- Form inputs are labeled via `aria-label`.
+- Form inputs have `aria-label` attributes.
+- Buttons are keyboard-accessible.
+- Reduced motion is applied when users prefer it.
+- The app avoids `dangerouslySetInnerHTML` and uses semantic markup.
+- Visual contrast is designed for readability on glass surfaces.
 

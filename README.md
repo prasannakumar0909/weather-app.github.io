@@ -1,63 +1,59 @@
 # Forecast — Weather App
 
-A high-performance, glassmorphic weather application built with React + Vite, TypeScript, Tailwind CSS, Redux Toolkit, React Query, and Framer Motion.
+A polished weather dashboard built with React + Vite, TypeScript, Tailwind CSS, Redux Toolkit, React Query, and Framer Motion.
 
 ---
 
-##  Features
+## Features
 
-- **Auto-locate on first load** via `navigator.geolocation` (only after the browser has already granted permission — no surprise prompts).
-- **Add up to 5 cities** by ZIP / postal code.
-- **Dynamic theming**: gradients and animated particle layers (rain, snow, lightning, stars, drifting clouds, sun glow, mist) crossfade as the active city's weather changes.
-- **Glassmorphism UI** with custom typography and grain texture overlay.
-- **Hero + Mini cards layout**: a primary city in focus, plus a tappable rail of secondary cities. Click any mini card to promote it.
-- **Hourly strip (next 24h)** and **5-day outlook** with min/max bars and precipitation probability.
-- **Celsius ⇄ Fahrenheit toggle** with spring-animated thumb.
-- **Toast notifications** for all error and success paths.
-- **Persistent state**: cities, primary, and unit choice survive reloads via `localStorage`.
+- **Auto-locate by browser permission** via `navigator.geolocation`.
+- **Add up to 5 cities** by ZIP/postal code.
+- **Bulk ZIP entry**: enter multiple ZIPs separated by commas, spaces, or semicolons.
+- **Dynamic theming**: gradients and animated weather effects adapt to the primary city's conditions.
+- **Primary + mini city layout**: one main city with supporting city cards.
+- **Hourly strip** and **5-day outlook** with precipitation probability.
+- **Celsius ⇄ Fahrenheit** toggle.
+- **Toast notifications** for success, duplicate entries, and errors.
+- **Persistent state**: saved cities, primary selection, unit preference, and geo consent survive reloads via `localStorage`.
+- **Backend proxy**: all weather requests are routed through the Spring Boot backend to protect the API key.
 - **Reduced-motion aware**: respects `prefers-reduced-motion`.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Install
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Get an API key
-
-Forecast uses OpenWeatherMap. Free tier is plenty.
-
-1. Get your API key from the OpenWeatherMap dashboard.
-
-### 3. Configure environment
+### 2. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` to point the frontend at the local backend:
+Edit `.env` with your OpenWeatherMap key:
 
 ```env
 VITE_API_BASE_URL=/api
+VITE_BASE_URL=/
 OPENWEATHERMAP_API_KEY=your_actual_key_here
 ```
 
-> ⚠️ Never commit `.env`. It's in `.gitignore` by default.
+> ⚠️ Do not commit `.env`. It is excluded from version control.
 
-### 4. Run
-
-Open a terminal and start the backend first:
+### 3. Run the backend
 
 ```bash
 cd backend
 mvn spring-boot:run
 ```
 
-Then start the frontend in a separate terminal:
+### 4. Run the frontend
+
+From the repository root:
 
 ```bash
 npm run dev
@@ -65,108 +61,93 @@ npm run dev
 
 Open the app at <http://localhost:5173>.
 
-### 5. Railway deployment
+---
 
-This repo is set up to deploy as a single Railway Docker service. The backend serves the frontend static build from Spring Boot.
+## Deployment
 
-1. Create a Railway project and connect this repository.
-2. Ensure Railway runs the root `Dockerfile`.
-3. Railway will set `PORT`; Spring Boot reads it automatically.
-4. Add environment variables if you want to override the OpenWeatherMap key:
+The repository includes a root `Dockerfile` that builds the frontend and packages it into the Spring Boot backend.
 
-```bash
-OPENWEATHERMAP_API_KEY=your_actual_key_here
-VITE_BASE_URL=/  # optional if you need a custom root base
-```
-
-If you want to use the embedded key, no extra key configuration is required.
-
-### 5. Build for production
+1. Build the Docker image:
 
 ```bash
-npm run build
-npm run preview
+docker build -t forecast-weather .
 ```
+
+2. Run the container:
+
+```bash
+docker run -p 8080:8080 --env OPENWEATHERMAP_API_KEY=your_actual_key_here forecast-weather
+```
+
+3. Visit <http://localhost:8080>.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 src/
 ├─ api/
-│  ├─ client.ts          # Axios instances with interceptors (auth, errors)
-│  └─ weather.ts         # Endpoint functions: lookupZip, fetchCurrentWeather, fetchForecast
+│  ├─ client.ts          # Axios client with backend base URL and error normalization
+│  └─ weather.ts         # Local endpoint wrappers: geo/zip, weather, forecast
 ├─ components/
-│  ├─ Dashboard.tsx      # Top-level layout orchestration
+│  ├─ Dashboard.tsx      # Layout and feature orchestration
 │  ├─ DynamicBackground.tsx
-│  ├─ WeatherEffects.tsx # Framer Motion particle systems
+│  ├─ WeatherEffects.tsx # Animated particle/weather visuals
 │  ├─ HeroCard.tsx       # Primary city display
-│  ├─ MiniCard.tsx       # Secondary city tile
-│  ├─ SearchBar.tsx      # Zip + country form
+│  ├─ MiniCard.tsx       # Secondary city cards
+│  ├─ SearchBar.tsx      # ZIP entry and bulk add UI
 │  ├─ UnitToggle.tsx     # °C / °F switch
-│  ├─ HourlyForecast.tsx # Next 24h horizontal scroll
-│  ├─ DailyForecast.tsx  # 5-day summary
-│  ├─ NoState.tsx     # First-run welcome
-│  └─ WeatherIcon.tsx    # Lucide icon mapper
+│  ├─ HourlyForecast.tsx # 24-hour forecast strip
+│  ├─ DailyForecast.tsx  # 5-day forecast summary
+│  ├─ NoState.tsx        # Welcome / geolocation prompt
+│  └─ WeatherIcon.tsx    # Icon mapping
 ├─ hooks/
-│  ├─ useWeather.ts      # React Query wrappers
-│  ├─ useGeolocation.ts  # Browser geolocation + reverse-geocode
+│  ├─ useWeather.ts      # React Query wrappers for current + forecast data
+│  ├─ useGeolocation.ts  # Browser geolocation and reverse geocode helper
 │  └─ useDebouncedValue.ts
 ├─ store/
-│  ├─ index.ts           # Redux store + typed hooks
-│  └─ citiesSlice.ts     # Cities, primary, unit, geo consent
+│  ├─ index.ts           # Redux store configuration
+│  └─ citiesSlice.ts     # Saved cities, primary city, units, geo consent
 ├─ types/
-│  └─ weather.ts         # Shared TS types
+│  └─ weather.ts         # Shared weather and city types
 ├─ utils/
-│  ├─ format.ts          # Temperature, time, debounce helpers
-│  └─ theme.ts           # Theme derivation + gradient/accent maps
+│  ├─ format.ts          # Formatting helpers for time, temperature, units
+│  └─ theme.ts           # Weather theme mapping and gradients
 ├─ styles/
-│  └─ index.css          # Tailwind + glass utilities
-├─ App.tsx               # Providers (Redux, React Query, Toaster)
-└─ main.tsx              # Entry
+│  └─ index.css          # Tailwind and global styles
+├─ App.tsx               # Providers and app shell
+└─ main.tsx              # React entrypoint
 ```
 
 ---
 
-## 📖 Documentation
+## Documentation
 
-- [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md) — User flows, feature inventory, UX states
-- [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — Architecture, API integration, security, performance
+- [`docs/FUNCTIONAL.md`](docs/FUNCTIONAL.md) — user flows, features, and UX states
+- [`docs/TECHNICAL.md`](docs/TECHNICAL.md) — architecture, API details, and performance considerations
 
 ---
 
-## 🧰 Stack Rationale
+## Stack
 
 | Concern | Choice | Why |
 | --- | --- | --- |
-| Build tool | **Vite** | Sub-second HMR, native ESM, zero config |
-| Language | **TypeScript** (strict) | Catch API shape drift at compile time |
-| Styling | **Tailwind CSS** | Co-located styles, design tokens via theme |
-| Server state | **React Query** | Cache, dedup, background refresh — perfect for read-heavy weather data |
-| Client state | **Redux Toolkit** | A single source of truth for the *city list* (which is the only mutable client state worth managing globally) |
-| Motion | **Framer Motion** | `AnimatePresence`, `layout`, declarative orchestration |
-| HTTP | **Axios** | Interceptors give us one place to inject the API key and normalize errors |
-| Icons | **lucide-react** | Tree-shakable, consistent stroke weights |
-| Notifications | **react-hot-toast** | Tiny, themable, no provider boilerplate beyond `<Toaster />` |
+| Build | Vite | fast HMR and modern build pipeline |
+| Language | TypeScript | type-safe API and UI code |
+| Styling | Tailwind CSS | utility-driven styling and responsive layout |
+| Server state | React Query | caching, retry, stale-time, and deduping |
+| Client state | Redux Toolkit | persisted user city list and preferences |
+| Motion | Framer Motion | declarative transitions and layout animation |
+| HTTP | Axios | error normalization and interceptors |
+| Notifications | react-hot-toast | lightweight toast UX |
 
 ---
 
-## 🛡 Security Notes
+## Notes
 
-1. **API keys** live in `.env` files, never committed. Vite exposes only `VITE_`-prefixed vars.
-2. **Client-side keys** are still visible in the browser bundle — for production, proxy through a backend or use a domain-restricted key.
-3. **Rate limiting**: the SearchBar form requires an explicit submit; the auto-detect path runs at most once per session. React Query's `staleTime` (10 min) prevents accidental refetch storms.
-4. **No PII**: nothing is sent to any server other than OpenWeatherMap. Geolocation is used only to resolve coordinates client-side.
-5. **localStorage scope**: persisted state contains only city display names and coordinates — nothing sensitive.
-
----
-
-## 🔧 Development Tips
-
-- React Query Devtools open via the floating icon (dev only).
-- Redux state inspectable via the [Redux DevTools browser extension](https://github.com/reduxjs/redux-devtools).
-- All animations honor `prefers-reduced-motion`.
-- Tailwind's IntelliSense extension works out-of-the-box.
+- The backend proxies all OpenWeatherMap calls, so the public frontend never stores the raw API key.
+- The frontend persists user state in `localStorage`, while weather payloads are cached in React Query.
+- The app supports multiple ZIPs in one submission and enforces a hard limit of 5 saved cities.
 
 ---
